@@ -1,109 +1,70 @@
-import streamlit as st 
-import numpy as np 
+from datetime import datetime
 
-#import matplotlib
-#from sklearn import datasets
-#from sklearn.model_selection import train_test_split
+import streamlit as st
+from vega_datasets import data
 
-#from sklearn.decomposition import PCA
-#from sklearn.svm import SVC
-#from sklearn.neighbors import KNeighborsClassifier
-#from sklearn.ensemble import RandomForestClassifier
+from utils import chart, db
 
-#from sklearn.metrics import accuracy_score
+COMMENT_TEMPLATE_MD = """{} - {}
+> {}"""
 
-st.title('Streamlit Example')
 
-st.write("""
-# Explore different classifier and datasets
-Which one is the best?
-""")
+def space(num_lines=1):
+    """Adds empty lines to the Streamlit app."""
+    for _ in range(num_lines):
+        st.write("")
 
-dataset_name = st.sidebar.selectbox(
-    'Select Dataset',
-    ('Iris', 'Breast Cancer', 'Wine')
-)
 
-st.write(f"## {dataset_name} Dataset")
+st.set_page_config(layout="centered", page_icon="💬", page_title="Commenting app")
 
-classifier_name = st.sidebar.selectbox(
-    'Select classifier',
-    ('KNN', 'SVM', 'Random Forest')
-)
+# Data visualisation part
 
-def get_dataset(name):
-    data = None
-    if name == 'Iris':
-        data = datasets.load_iris()
-    elif name == 'Wine':
-        data = datasets.load_wine()
-    else:
-        data = datasets.load_breast_cancer()
-    X = data.data
-    y = data.target
-    return X, y
+st.title("💬 Commenting app")
 
-X, y = get_dataset(dataset_name)
-st.write('Shape of dataset:', X.shape)
-st.write('number of classes:', len(np.unique(y)))
+source = data.stocks()
+all_symbols = source.symbol.unique()
+symbols = st.multiselect("Choose stocks to visualize", all_symbols, all_symbols[:3])
 
-def add_parameter_ui(clf_name):
-    params = dict()
-    if clf_name == 'SVM':
-        C = st.sidebar.slider('C', 0.01, 10.0)
-        params['C'] = C
-    elif clf_name == 'KNN':
-        K = st.sidebar.slider('K', 1, 15)
-        params['K'] = K
-    else:
-        max_depth = st.sidebar.slider('max_depth', 2, 15)
-        params['max_depth'] = max_depth
-        n_estimators = st.sidebar.slider('n_estimators', 1, 100)
-        params['n_estimators'] = n_estimators
-    return params
+space(1)
 
-params = add_parameter_ui(classifier_name)
+source = source[source.symbol.isin(symbols)]
+chart = chart.get_chart(source)
+st.altair_chart(chart, use_container_width=True)
 
-def get_classifier(clf_name, params):
-    clf = None
-    if clf_name == 'SVM':
-        clf = SVC(C=params['C'])
-    elif clf_name == 'KNN':
-        clf = KNeighborsClassifier(n_neighbors=params['K'])
-    else:
-        clf = clf = RandomForestClassifier(n_estimators=params['n_estimators'], 
-            max_depth=params['max_depth'], random_state=1234)
-    return clf
+space(2)
 
-clf = get_classifier(classifier_name, params)
-#### CLASSIFICATION ####
+# Comments part
 
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=1234)
+conn = db.connect()
+comments = db.collect(conn)
 
-clf.fit(X_train, y_train)
-y_pred = clf.predict(X_test)
+with st.expander("💬 Open comments"):
 
-acc = accuracy_score(y_test, y_pred)
+    # Show comments
 
-st.write(f'Classifier = {classifier_name}')
-st.write(f'Accuracy =', acc)
+    st.write("**Comments:**")
 
-#### PLOT DATASET ####
-# Project the data onto the 2 primary principal components
-pca = PCA(2)
-X_projected = pca.fit_transform(X)
+    for index, entry in enumerate(comments.itertuples()):
+        st.markdown(COMMENT_TEMPLATE_MD.format(entry.name, entry.date, entry.comment))
 
-x1 = X_projected[:, 0]
-x2 = X_projected[:, 1]
+        is_last = index == len(comments) - 1
+        is_new = "just_posted" in st.session_state and is_last
+        if is_new:
+            st.success("☝️ Your comment was successfully posted.")
 
-fig = plt.figure()
-plt.scatter(x1, x2,
-        c=y, alpha=0.8,
-        cmap='viridis')
+    space(2)
 
-plt.xlabel('Principal Component 1')
-plt.ylabel('Principal Component 2')
-plt.colorbar()
+    # Insert comment
 
-#plt.show()
-st.pyplot(fig)
+    st.write("**Add your own comment:**")
+    form = st.form("comment")
+    name = form.text_input("Name")
+    comment = form.text_area("Comment")
+    submit = form.form_submit_button("Add comment")
+
+    if submit:
+        date = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        db.insert(conn, [[name, comment, date]])
+        if "just_posted" not in st.session_state:
+            st.session_state["just_posted"] = True
+        st.experimental_rerun()
