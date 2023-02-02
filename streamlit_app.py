@@ -18,8 +18,7 @@ left_column.text(' ')
 left_column.text(' ')
 left_column.text(' ')
 left_column.text('Choose A Player for Analysis:')
-with right_column:
-    player = st.selectbox('', list(epl_strikers_df['player_name'].unique()))
+
 # Space out the maps so the second one is 3x the size of the other three
 player_image_container, horizontal_bar_container = st.columns((1, 3))
 player_image_container.text(' ')
