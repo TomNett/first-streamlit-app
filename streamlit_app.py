@@ -24,8 +24,7 @@ player_image_container, horizontal_bar_container = st.columns((1, 3))
 player_image_container.text(' ')
 player_image_container.text(' ')
 player_image_container.text(' ')
-with player_image_container:
-    st.image(get_and_display_player_image(epl_strikers_df, player), width=300)
+
 with horizontal_bar_container:
     st.plotly_chart(plot_horizontal_bar(epl_strikers_df, player), 
                     use_container_width=True
